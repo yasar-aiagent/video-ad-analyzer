@@ -1,5 +1,26 @@
-import streamlit as st
+from dotenv import load_dotenv
 import os
+
+# Load environment variables
+load_dotenv()
+
+import streamlit as st
+
+# Set page config FIRST
+st.set_page_config(
+    page_title="Video Ad Analyzer",
+    page_icon="🎬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Get API key - Try Streamlit secrets first, then environment
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except:
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+# Import other libraries
 import cv2
 import base64
 import json
@@ -14,23 +35,6 @@ import io
 import requests
 from urllib.parse import urlparse
 import yt_dlp
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-import streamlit as st
-# the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-# do not change this unless explicitly requested by the user
-
-st.set_page_config(
-    page_title="Video Ad Analyzer",
-    page_icon="🎬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 METRIC_CATEGORIES = {
     "Actor & Human Elements": [
