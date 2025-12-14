@@ -1208,34 +1208,96 @@ def main():
             perf_data = results.get("performance_metrics", {})
             
             if perf_data:
+                # Campaign Information
+                st.markdown("#### Campaign Information")
+                ccol1, ccol2, ccol3, ccol4 = st.columns(4)
+                with ccol1:
+                    display_metric_card("Ad Name", perf_data.get('Ad Name', 'N/A'))
+                with ccol2:
+                    display_metric_card("Campaign", perf_data.get('Campaign Name', 'N/A'))
+                with ccol3:
+                    display_metric_card("Adset", perf_data.get('Adset Name', 'N/A'))
+                with ccol4:
+                    display_metric_card("Status", perf_data.get('Status', 'N/A'))
+                
+                st.markdown("---")
+                
+                # Performance Metrics - Row 1
+                st.markdown("#### Performance Metrics")
                 pcol1, pcol2, pcol3, pcol4 = st.columns(4)
                 with pcol1:
                     display_metric_card("Impressions", f"{perf_data.get('Impressions', 0):,}")
                 with pcol2:
                     display_metric_card("Clicks", f"{perf_data.get('Outbound Clicks', 0):,}")
                 with pcol3:
-                    display_metric_card("Spend", f"${perf_data.get('Spend ($)', 0):,.2f}")
+                    display_metric_card("Landing Page Views", f"{perf_data.get('Landing Page Views', 0):,}")
                 with pcol4:
-                    ctr = perf_data.get('Click Through Rate (%)', 0)
-                    display_metric_card("CTR", f"{ctr}%", is_score=False)
+                    display_metric_card("Leads", f"{perf_data.get('Total Leads', 0):,}")
                 
+                # Performance Metrics - Row 2
                 pcol1, pcol2, pcol3, pcol4 = st.columns(4)
                 with pcol1:
-                    display_metric_card("Cost Per Click", f"${perf_data.get('Cost Per Click', 0):,.2f}")
-                with pcol2:
-                    display_metric_card("CPM", f"${perf_data.get('Cost Per 1000 Impressions', 0):,.2f}")
-                with pcol3:
-                    display_metric_card("ROAS", f"{perf_data.get('Return on Ad Spend', 0):.2f}x")
-                with pcol4:
                     display_metric_card("Purchases", f"{perf_data.get('Total Purchases', 0):,}")
+                with pcol2:
+                    display_metric_card("Registrations", f"{perf_data.get('Total Registrations', 0):,}")
+                with pcol3:
+                    display_metric_card("Spend", f"₹{perf_data.get('Spend (₹)', 0):,.2f}")
+                with pcol4:
+                    display_metric_card("CPA", f"₹{perf_data.get('Actual CPA (₹)', 0):,.2f}")
                 
+                st.markdown("---")
+                
+                # Calculated Metrics
+                st.markdown("#### Calculated Metrics")
+                pcol1, pcol2, pcol3, pcol4 = st.columns(4)
+                with pcol1:
+                    ctr = perf_data.get('CTR (%)', 0)
+                    display_metric_card("CTR", f"{ctr:.2f}%", is_score=False)
+                with pcol2:
+                    display_metric_card("CPC", f"₹{perf_data.get('CPC (₹)', 0):,.2f}")
+                with pcol3:
+                    display_metric_card("CPM", f"₹{perf_data.get('Cost Per 1000 Impressions', 0):,.2f}")
+                with pcol4:
+                    display_metric_card("ROAS", f"{perf_data.get('Return on Ad Spend', 0):.2f}x")
+                
+                st.markdown("---")
+                
+                # Target vs Actual
+                st.markdown("#### Target vs Actual")
+                tcol1, tcol2, tcol3, tcol4 = st.columns(4)
+                with tcol1:
+                    display_metric_card("Target CPA", f"₹{perf_data.get('Target CPA (₹)', 0):,.2f}")
+                with tcol2:
+                    display_metric_card("Actual CPA", f"₹{perf_data.get('Actual CPA (₹)', 0):,.2f}")
+                with tcol3:
+                    display_metric_card("Target ROAS", f"{perf_data.get('Target ROAS', 0):.2f}x")
+                with tcol4:
+                    display_metric_card("Actual ROAS", f"{perf_data.get('Return on Ad Spend', 0):.2f}x")
+                
+                st.markdown("---")
+                
+                # Creative Content
+                st.markdown("#### Creative Content")
+                if perf_data.get("Title"):
+                    st.markdown(f"**Title:** {perf_data.get('Title')}")
+                if perf_data.get("Body"):
+                    with st.expander("View Ad Body Text", expanded=False):
+                        st.markdown(perf_data.get('Body'))
+                if perf_data.get("Link"):
+                    st.markdown(f"**Link:** [{perf_data.get('Link')}]({perf_data.get('Link')})")
+                if perf_data.get("CTA"):
+                    st.markdown(f"**CTA:** {perf_data.get('CTA')}")
+                
+                st.markdown("---")
+                
+                # All Performance Data Table
                 st.markdown("#### All Performance Data")
                 perf_df = pd.DataFrame([perf_data]).T
                 perf_df.columns = ["Value"]
                 st.dataframe(perf_df, use_container_width=True)
             else:
                 st.info("No performance metrics were provided. Add Meta Ads data in Step 2 to see performance analysis.")
-        
+
         with tabs[1]:
             st.markdown("### Actor & Human Elements")
             actor_data = results.get("actor_human_elements", {})
