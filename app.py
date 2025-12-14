@@ -802,7 +802,32 @@ def main():
         st.session_state.video_ready = False
     
     st.markdown("### Step 1: Upload Video")
-    input_method = st.radio("Choose input method:", ["Upload File", "Video URL"], horizontal=True)
+    
+    # Check for video_id parameter ONLY if not already processed
+    if 'initial_load_done' not in st.session_state:
+        query_params = st.query_params
+        video_id = query_params.get("video_id", None)
+        
+        if video_id:
+            st.session_state.default_method = "Video URL"
+            st.session_state.prefilled_url = f"https://www.facebook.com/reel/{video_id}"
+            st.session_state.auto_load = True
+        else:
+            st.session_state.default_method = "Upload File"
+            st.session_state.prefilled_url = ""
+            st.session_state.auto_load = False
+        
+        st.session_state.initial_load_done = True
+    
+    # Get the default method (will persist across reruns)
+    default_index = 1 if st.session_state.get('default_method', "Upload File") == "Video URL" else 0
+    
+    input_method = st.radio(
+        "Choose input method:", 
+        ["Upload File", "Video URL"], 
+        index=default_index,
+        horizontal=True
+    )
     
     if input_method == "Upload File":
         col1, col2 = st.columns([2, 1])
@@ -831,10 +856,52 @@ def main():
             st.session_state.video_ready = True
             
             st.markdown("### Video Preview")
+            st.markdown("""
+                <style>
+                    .stVideo {
+                        max-width: 350px;
+                        margin: 0 auto;
+                    }
+                    .stVideo video {
+                        max-height: 600px;
+                        width: auto !important;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
             st.video(uploaded_file)
     else:
-        video_url = st.text_input("Enter video URL:", placeholder="https://example.com/video.mp4")
-        if video_url and st.button("Load Video", key="load_url"):
+        # Get prefilled URL from session state
+        default_url = st.session_state.get('prefilled_url', '')
+        
+        video_url = st.text_input(
+            "Enter video URL:", 
+            value=default_url,
+            placeholder="https://example.com/video.mp4"
+        )
+        
+        # Auto-load if URL was prefilled and not yet loaded
+        if st.session_state.get('auto_load', False) and video_url:
+            if st.session_state.video_path and os.path.exists(st.session_state.video_path):
+                try:
+                    os.unlink(st.session_state.video_path)
+                except:
+                    pass
+            
+            with st.spinner("Downloading video..."):
+                tmp_path, error = download_video_from_url(video_url)
+            if error:
+                st.error(error)
+                st.session_state.video_ready = False
+            elif tmp_path:
+                st.session_state.video_path = tmp_path
+                st.session_state.video_ready = True
+                st.success("Video downloaded successfully!")
+            
+            # Disable auto-load after first attempt
+            st.session_state.auto_load = False
+        
+        # Manual load button
+        if st.button("Load Video", key="load_url"):
             if st.session_state.video_path and os.path.exists(st.session_state.video_path):
                 try:
                     os.unlink(st.session_state.video_path)
@@ -853,11 +920,77 @@ def main():
         
         if st.session_state.video_ready and st.session_state.video_path:
             st.markdown("### Video Preview")
+            st.markdown("""
+                <style>
+                    .stVideo {
+                        max-width: 350px;
+                        margin: 0 auto;
+                        border-radius: 10px;
+                    }
+                    .stVideo video {
+                        max-height: 600px;
+                        width: auto !important;
+                    }
+                        .st-emotion-cache-1vo6xi6{
+                        text-align: center;
+                        }
+                        .st-emotion-cache-1q82h82{
+                            font-size: 16px;
+                        text-align: left;
+                        }
+                </style>
+            """, unsafe_allow_html=True)
             st.video(st.session_state.video_path)
-    
+
+
+
     st.markdown("---")
     st.markdown("### Step 2: Meta Performance Metrics (Optional)")
     st.markdown("Add your Meta Ads performance data to combine with visual analysis")
+    
+    # Check for metrics in URL parameters
+    if 'metrics_loaded_from_url' not in st.session_state:
+        query_params = st.query_params
+        
+        # Check if we have ad metrics in URL
+        if query_params.get("ad_name"):
+            try:
+                perf_data = {
+                    "Ad ID": query_params.get("video_id", ""),
+                    "Ad Name": query_params.get("ad_name", ""),
+                    "Campaign Name": query_params.get("campaign", ""),
+                    "Adset Name": query_params.get("adset", ""),
+                    "Status": query_params.get("status", ""),
+                    "Title": query_params.get("title", ""),
+                    "Body": query_params.get("body", ""),
+                    "Link": query_params.get("link", ""),
+                    "CTA": query_params.get("cta", ""),
+                    "Impressions": int(query_params.get("impressions", 0)),
+                    "Outbound Clicks": int(query_params.get("clicks", 0)),
+                    "Landing Page Views": int(query_params.get("landing_page_views", 0)),
+                    "Total Leads": int(query_params.get("leads", 0)),
+                    "Total Purchases": int(query_params.get("purchases", 0)),
+                    "Total Registrations": int(query_params.get("registrations", 0)),
+                    "Spend (₹)": float(query_params.get("spend", 0)),
+                    "Target CPA (₹)": float(query_params.get("target_cpa", 0)),
+                    "Actual CPA (₹)": float(query_params.get("cpa", 0)),
+                    "Return on Ad Spend": float(query_params.get("roas", 0)),
+                    "CTR (%)": float(query_params.get("ctr", 0)),
+                    "CPC (₹)": float(query_params.get("cpc", 0))
+                }
+                
+                # Calculate additional derived metrics
+                derived = calculate_derived_metrics(perf_data)
+                perf_data.update(derived)
+                
+                st.session_state.performance_metrics = perf_data
+                st.session_state.metrics_loaded_from_url = True
+                st.success("Performance metrics loaded from URL!")
+            except Exception as e:
+                st.warning(f"Could not load metrics from URL: {str(e)}")
+                st.session_state.metrics_loaded_from_url = False
+        else:
+            st.session_state.metrics_loaded_from_url = False
     
     perf_input_method = st.radio("Choose input method:", ["Manual Entry", "Upload CSV"], horizontal=True, key="perf_method")
     
@@ -865,36 +998,51 @@ def main():
         with st.expander("Enter Performance Metrics", expanded=False):
             pcol1, pcol2, pcol3 = st.columns(3)
             with pcol1:
-                ad_id = st.text_input("Ad ID", key="ad_id")
-                ad_name = st.text_input("Ad Name", key="ad_name")
-                campaign_name = st.text_input("Campaign Name", key="campaign_name")
-                impressions = st.number_input("Impressions", min_value=0, value=0, key="impressions")
-                clicks = st.number_input("Outbound Clicks", min_value=0, value=0, key="clicks")
+                ad_id = st.text_input("Ad ID", value=st.session_state.performance_metrics.get("Ad ID", "") if st.session_state.performance_metrics else "", key="ad_id")
+                ad_name = st.text_input("Ad Name", value=st.session_state.performance_metrics.get("Ad Name", "") if st.session_state.performance_metrics else "", key="ad_name")
+                campaign_name = st.text_input("Campaign Name", value=st.session_state.performance_metrics.get("Campaign Name", "") if st.session_state.performance_metrics else "", key="campaign_name")
+                adset_name = st.text_input("Adset Name", value=st.session_state.performance_metrics.get("Adset Name", "") if st.session_state.performance_metrics else "", key="adset_name")
+                status = st.text_input("Status", value=st.session_state.performance_metrics.get("Status", "") if st.session_state.performance_metrics else "", key="status")
             with pcol2:
-                landing_views = st.number_input("Landing Page Views", min_value=0, value=0, key="landing_views")
-                spend = st.number_input("Spend ($)", min_value=0.0, value=0.0, format="%.2f", key="spend")
-                leads = st.number_input("Total Leads", min_value=0, value=0, key="leads")
-                purchases = st.number_input("Total Purchases", min_value=0, value=0, key="purchases")
-                registrations = st.number_input("Total Registrations", min_value=0, value=0, key="registrations")
+                impressions = st.number_input("Impressions", min_value=0, value=st.session_state.performance_metrics.get("Impressions", 0) if st.session_state.performance_metrics else 0, key="impressions")
+                clicks = st.number_input("Outbound Clicks", min_value=0, value=st.session_state.performance_metrics.get("Outbound Clicks", 0) if st.session_state.performance_metrics else 0, key="clicks")
+                landing_views = st.number_input("Landing Page Views", min_value=0, value=st.session_state.performance_metrics.get("Landing Page Views", 0) if st.session_state.performance_metrics else 0, key="landing_views")
+                leads = st.number_input("Total Leads", min_value=0, value=st.session_state.performance_metrics.get("Total Leads", 0) if st.session_state.performance_metrics else 0, key="leads")
+                purchases = st.number_input("Total Purchases", min_value=0, value=st.session_state.performance_metrics.get("Total Purchases", 0) if st.session_state.performance_metrics else 0, key="purchases")
             with pcol3:
-                target_cpa = st.number_input("Target CPA ($)", min_value=0.0, value=0.0, format="%.2f", key="target_cpa")
-                actual_cpa = st.number_input("Actual CPA ($)", min_value=0.0, value=0.0, format="%.2f", key="actual_cpa")
-                roas = st.number_input("Return on Ad Spend", min_value=0.0, value=0.0, format="%.2f", key="roas")
+                registrations = st.number_input("Total Registrations", min_value=0, value=st.session_state.performance_metrics.get("Total Registrations", 0) if st.session_state.performance_metrics else 0, key="registrations")
+                spend = st.number_input("Spend (₹)", min_value=0.0, value=st.session_state.performance_metrics.get("Spend (₹)", 0.0) if st.session_state.performance_metrics else 0.0, format="%.2f", key="spend")
+                target_cpa = st.number_input("Target CPA (₹)", min_value=0.0, value=st.session_state.performance_metrics.get("Target CPA (₹)", 0.0) if st.session_state.performance_metrics else 0.0, format="%.2f", key="target_cpa")
+                actual_cpa = st.number_input("Actual CPA (₹)", min_value=0.0, value=st.session_state.performance_metrics.get("Actual CPA (₹)", 0.0) if st.session_state.performance_metrics else 0.0, format="%.2f", key="actual_cpa")
+                roas = st.number_input("Return on Ad Spend", min_value=0.0, value=st.session_state.performance_metrics.get("Return on Ad Spend", 0.0) if st.session_state.performance_metrics else 0.0, format="%.2f", key="roas")
+            
+            # Text fields
+            st.markdown("#### Ad Creative Content")
+            title = st.text_input("Title", value=st.session_state.performance_metrics.get("Title", "") if st.session_state.performance_metrics else "", key="title")
+            body = st.text_area("Body", value=st.session_state.performance_metrics.get("Body", "") if st.session_state.performance_metrics else "", height=150, key="body")
+            link = st.text_input("Link URL", value=st.session_state.performance_metrics.get("Link", "") if st.session_state.performance_metrics else "", key="link")
+            cta = st.text_input("CTA Type", value=st.session_state.performance_metrics.get("CTA", "") if st.session_state.performance_metrics else "", key="cta")
             
             if st.button("Save Performance Metrics"):
                 perf_data = {
                     "Ad ID": ad_id,
                     "Ad Name": ad_name,
                     "Campaign Name": campaign_name,
+                    "Adset Name": adset_name,
+                    "Status": status,
+                    "Title": title,
+                    "Body": body,
+                    "Link": link,
+                    "CTA": cta,
                     "Impressions": impressions,
                     "Outbound Clicks": clicks,
                     "Landing Page Views": landing_views,
-                    "Spend ($)": spend,
+                    "Spend (₹)": spend,
                     "Total Leads": leads,
                     "Total Purchases": purchases,
                     "Total Registrations": registrations,
-                    "Target CPA ($)": target_cpa,
-                    "Actual CPA ($)": actual_cpa,
+                    "Target CPA (₹)": target_cpa,
+                    "Actual CPA (₹)": actual_cpa,
                     "Return on Ad Spend": roas
                 }
                 derived = calculate_derived_metrics(perf_data)
@@ -917,7 +1065,63 @@ def main():
     
     if st.session_state.performance_metrics:
         st.info(f"Performance metrics loaded: {len(st.session_state.performance_metrics)} fields")
-    
+        with st.expander("View All Saved Metrics", expanded=False):
+            metrics = st.session_state.performance_metrics
+            
+            st.markdown("#### Campaign Information")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Ad ID", metrics.get("Ad ID", "N/A"))
+                st.metric("Ad Name", metrics.get("Ad Name", "N/A"))
+            with col2:
+                st.metric("Campaign", metrics.get("Campaign Name", "N/A"))
+                st.metric("Adset", metrics.get("Adset Name", "N/A"))
+            with col3:
+                st.metric("Status", metrics.get("Status", "N/A"))
+            
+            st.markdown("#### Performance Metrics")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Impressions", f"{metrics.get('Impressions', 0):,}")
+                st.metric("Clicks", f"{metrics.get('Outbound Clicks', 0):,}")
+            with col2:
+                st.metric("Landing Page Views", f"{metrics.get('Landing Page Views', 0):,}")
+                st.metric("Leads", f"{metrics.get('Total Leads', 0):,}")
+            with col3:
+                st.metric("Purchases", f"{metrics.get('Total Purchases', 0):,}")
+                st.metric("Registrations", f"{metrics.get('Total Registrations', 0):,}")
+            with col4:
+                st.metric("Spend", f"₹{metrics.get('Spend (₹)', 0):,.2f}")
+                st.metric("CPA", f"₹{metrics.get('Actual CPA (₹)', 0):,.2f}")
+            
+            st.markdown("#### Target vs Actual")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Target CPA", f"₹{metrics.get('Target CPA (₹)', 0):,.2f}")
+                st.metric("Actual CPA", f"₹{metrics.get('Actual CPA (₹)', 0):,.2f}")
+            with col2:
+                st.metric("Actual ROAS", f"{metrics.get('Return on Ad Spend', 0):.2f}")
+            
+            st.markdown("#### Calculated Metrics")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("CTR", f"{metrics.get('CTR (%)', 0):.2f}%")
+            with col2:
+                st.metric("CPC", f"₹{metrics.get('CPC (₹)', 0):,.2f}")
+            with col3:
+                st.metric("ROAS", f"{metrics.get('Return on Ad Spend', 0):.2f}")
+            
+            st.markdown("#### Creative Content")
+            if metrics.get("Title"):
+                st.markdown(f"**Title:** {metrics.get('Title')}")
+            if metrics.get("Body"):
+                st.markdown(f"**Body:** {metrics.get('Body')}")
+            if metrics.get("Link"):
+                st.markdown(f"**Link:** {metrics.get('Link')}")
+            if metrics.get("CTA"):
+                st.markdown(f"**CTA:** {metrics.get('CTA')}")
+
+
     st.markdown("---")
     st.markdown("### Step 3: Analyze Video")
     
